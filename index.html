@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pentatonic Fretboard — Guitar Patterns &amp; Chords</title>
+<meta name="description" content="A guitar fretboard tool for exploring major and minor pentatonic patterns and chords, with a random lick generator." />
+<style>
+  :root{
+    --panel-0:#171615;
+    --panel-1:#232120;
+    --panel-2:#2e2b28;
+    --panel-3:#38352f;
+    --ivory:#dcd5c2;
+    --ivory-dim:#8b8578;
+    --amber:#e8a33d;
+    --teal:#5fc9ba;
+    --steel:#93a19b;
+    --lcd-bg:#132318;
+    --lcd-fg:#8fe6a0;
+    --lcd-fg-dim:#3f6b4c;
+    --wood:#5b3d28;
+    --wood-hi:#7a5636;
+    --lick:#b48ee0;
+    --font-label:"Bahnschrift","Arial Narrow","Segoe UI Semibold",system-ui,sans-serif;
+    --font-lcd:ui-monospace,"Cascadia Mono","SFMono-Regular",Menlo,Consolas,monospace;
+    --font-body:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px 16px;
+    background:radial-gradient(120% 140% at 50% -10%, #26241f 0%, #0f0e0d 70%);
+    font-family:var(--font-body);
+    color:var(--ivory);
+  }
+
+  .rack{ width:100%; max-width:780px; }
+
+  .plate{
+    position:relative;
+    border-radius:18px;
+    padding:22px 24px 26px;
+    background:
+      repeating-linear-gradient(100deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+      linear-gradient(160deg, var(--panel-2), var(--panel-1) 45%, var(--panel-0) 100%);
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.5);
+    border:1px solid rgba(0,0,0,.6);
+  }
+
+  .screw{
+    position:absolute; width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #9a9488 0%, #4c473e 45%, #201e1b 100%);
+    box-shadow:0 1px 2px rgba(0,0,0,.7), inset 0 0 0 1px rgba(0,0,0,.5);
+  }
+  .screw::after{
+    content:""; position:absolute; left:50%; top:50%;
+    width:7px; height:1.4px; background:rgba(0,0,0,.55);
+    transform:translate(-50%,-50%) rotate(28deg);
+  }
+  .screw.tl{top:12px;left:12px;} .screw.tr{top:12px;right:12px;}
+  .screw.bl{bottom:12px;left:12px;} .screw.br{bottom:12px;right:12px;}
+
+  .brand-row{
+    display:flex; align-items:baseline; justify-content:space-between;
+    padding:2px 30px 14px; border-bottom:1px solid rgba(0,0,0,.5); margin-bottom:16px;
+  }
+  .brand{ font-family:var(--font-label); font-weight:700; letter-spacing:.14em; font-size:20px; color:var(--ivory); text-shadow:0 1px 0 rgba(0,0,0,.6); }
+  .brand small{ display:block; font-family:var(--font-label); font-weight:400; letter-spacing:.24em; font-size:9.5px; color:var(--ivory-dim); margin-top:3px; }
+  .model-tag{ font-family:var(--font-lcd); font-size:10.5px; letter-spacing:.08em; color:var(--ivory-dim); text-align:right; }
+
+  .lcd{
+    margin:0 6px 18px;
+    background:linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,0) 30%), var(--lcd-bg);
+    border-radius:6px; padding:12px 16px 13px;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.65), inset 0 0 0 1px #0a140d;
+    font-family:var(--font-lcd);
+  }
+  .lcd-line1{ font-size:17px; letter-spacing:.05em; color:var(--lcd-fg); text-shadow:0 0 6px rgba(143,230,160,.45); display:flex; justify-content:space-between; gap:10px; }
+  .lcd-line2{ margin-top:5px; font-size:11.5px; letter-spacing:.04em; color:var(--lcd-fg-dim); display:flex; justify-content:space-between; gap:10px; }
+  .lcd-caption{ margin-top:9px; font-family:var(--font-body); font-size:11px; line-height:1.5; color:#6f8f78; border-top:1px dashed rgba(143,230,160,.18); padding-top:8px; }
+
+  .section-label{ font-family:var(--font-label); font-size:10px; letter-spacing:.2em; color:var(--ivory-dim); margin:0 6px 8px; display:flex; justify-content:space-between; }
+  .section-label .hint{ letter-spacing:.05em; text-transform:none; font-size:10px; color:#635d52; }
+
+  .root-row{ display:grid; grid-template-columns:repeat(12, 1fr); gap:5px; margin:0 6px 18px; }
+  .root-btn{
+    position:relative; padding:9px 2px 8px;
+    background:linear-gradient(180deg, var(--panel-3), var(--panel-1));
+    border:1px solid rgba(0,0,0,.55); border-radius:5px;
+    color:var(--ivory-dim); font-family:var(--font-lcd); font-size:12px; letter-spacing:.02em;
+    cursor:pointer; box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 3px rgba(0,0,0,.4);
+    transition:background .12s, color .12s, transform .05s;
+  }
+  .root-btn .dot{ display:block; width:4px;height:4px;border-radius:50%; margin:5px auto 0; background:rgba(255,255,255,.08); }
+  .root-btn.in-scale .dot{ background:var(--teal); }
+  .root-btn:hover{ color:var(--ivory); }
+  .root-btn:active{ transform:translateY(1px); }
+  .root-btn.is-root{
+    color:var(--panel-0); background:linear-gradient(180deg, #f3bb63, var(--amber));
+    box-shadow:0 0 10px rgba(232,163,61,.5), inset 0 1px 0 rgba(255,255,255,.4); font-weight:700;
+  }
+  .root-btn.is-root .dot{ background:var(--panel-0); }
+
+  .switch-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:0 6px 20px; }
+  .rocker{ position:relative; display:flex; background:var(--panel-0); border-radius:7px; padding:3px; box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
+  .rocker-thumb{
+    position:absolute; top:3px; bottom:3px; left:3px; width:calc(50% - 3px); border-radius:5px;
+    background:linear-gradient(180deg, #f3bb63, var(--amber));
+    box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.4);
+    transition:transform .18s ease, background .18s ease; z-index:1;
+  }
+  .switch-block.view .rocker-thumb{ background:linear-gradient(180deg, #b9c6c1, var(--steel)); }
+  .rocker.pos-1 .rocker-thumb{ transform:translateX(100%); background:linear-gradient(180deg, #86dcce, var(--teal)); }
+  .switch-block.view .rocker.pos-1 .rocker-thumb{ background:linear-gradient(180deg, #b9c6c1, var(--steel)); }
+  .rocker-half{
+    position:relative; z-index:2; flex:1; padding:9px 4px; background:transparent; border:0;
+    font-family:var(--font-label); font-size:11.5px; letter-spacing:.14em; color:var(--ivory-dim); cursor:pointer;
+  }
+  .rocker-half[aria-pressed="true"]{ color:var(--panel-0); font-weight:700; }
+
+  /* fretboard */
+  .fb-wrap{
+    margin:0 6px 18px; padding:16px 14px 12px;
+    background:linear-gradient(180deg, #241a13, #150f0a);
+    border-radius:8px; box-shadow:inset 0 2px 6px rgba(0,0,0,.6);
+    overflow-x:auto;
+  }
+  .fb-inner{ display:inline-flex; align-items:flex-start; gap:8px; min-width:100%; }
+  .fb-strlabels{
+    display:flex; flex-direction:column; padding-top:0;
+    font-family:var(--font-lcd); font-size:11px; color:var(--ivory-dim);
+  }
+  .fb-strlabels span{ height:34px; display:flex; align-items:center; }
+
+  .fretboard{ position:relative; background:linear-gradient(180deg, var(--wood-hi), var(--wood)); border-radius:3px; }
+  .fret-line{ position:absolute; top:0; bottom:0; width:2px; background:rgba(0,0,0,.55); }
+  .fret-line.nut{ width:5px; background:linear-gradient(90deg, #efe9db, #c9c0a8); box-shadow:1px 0 0 rgba(0,0,0,.4); }
+  .string-line{ position:absolute; left:0; right:0; background:linear-gradient(180deg, #cfc7ad, #8f8770); box-shadow:0 1px 0 rgba(0,0,0,.35); }
+  .inlay{ position:absolute; width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.14); transform:translate(-50%,-50%); }
+
+  .note{
+    position:absolute; width:25px; height:25px; border-radius:50%;
+    transform:translate(-50%,-50%);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-lcd); font-size:9px; font-weight:700; letter-spacing:-.03em;
+    background:rgba(20,16,11,.55); color:transparent;
+    border:1.5px solid rgba(220,213,194,.35);
+    cursor:default;
+  }
+  .note.is-root-ctx{ border-color:rgba(232,163,61,.55); }
+  .note.is-active{
+    background:radial-gradient(circle at 35% 30%, #7fe0d1, var(--teal));
+    color:#0d211d; border-color:rgba(0,0,0,.3);
+    box-shadow:0 0 10px rgba(95,201,186,.6), 0 1px 2px rgba(0,0,0,.4);
+  }
+  .note.is-active.is-root{
+    background:radial-gradient(circle at 35% 30%, #f8d99a, var(--amber));
+    color:#3a2a0d;
+    box-shadow:0 0 12px rgba(232,163,61,.7), 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  .fret-numbers{ display:flex; position:relative; margin-top:6px; font-family:var(--font-lcd); font-size:10px; color:var(--ivory-dim); }
+  .fret-numbers span{ position:absolute; transform:translateX(-50%); }
+
+  /* degree / chord stage */
+  .stage-wrap{ margin:0 6px 20px; }
+  .stage{ display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; }
+  .peg, .tile{
+    position:relative; background:linear-gradient(180deg, var(--panel-3), var(--panel-1));
+    border:1px solid rgba(0,0,0,.55); border-radius:8px; padding:12px 6px 10px; text-align:center;
+    cursor:pointer; box-shadow:0 2px 3px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);
+    transition:transform .05s, box-shadow .15s, opacity .15s;
+  }
+  .peg:active, .tile:active{ transform:translateY(1px); }
+  .peg .deg, .tile .sym{ font-family:var(--font-label); font-weight:700; font-size:22px; color:var(--ivory); }
+  .peg .name{ margin-top:4px; font-family:var(--font-lcd); font-size:11px; color:var(--teal); }
+  .tile .rn{ position:absolute; top:6px; right:8px; font-family:var(--font-lcd); font-size:9.5px; color:var(--ivory-dim); }
+  .tile .notes{ margin-top:5px; font-family:var(--font-lcd); font-size:9.5px; color:var(--ivory-dim); letter-spacing:.03em; }
+  .peg.is-active, .tile.is-active{
+    box-shadow:0 0 0 1.5px var(--teal), 0 0 14px rgba(95,201,186,.55), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .peg.is-active .name, .tile.is-active .sym{ color:var(--teal); text-shadow:0 0 8px rgba(95,201,186,.6); }
+  .peg.is-off{ opacity:.4; }
+
+  .note.has-lick{ border-color:var(--lick); box-shadow:0 0 0 1px var(--lick) inset; }
+  .lick-badge{
+    position:absolute; top:-7px; right:-7px;
+    min-width:14px; height:14px; padding:0 2px; border-radius:7px;
+    background:var(--lick); color:#241733;
+    font-family:var(--font-lcd); font-size:8.5px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 1px 2px rgba(0,0,0,.5); z-index:3;
+  }
+
+  .lick-wrap{ margin:18px 6px 0; }
+  .lick-controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .lick-btn{
+    font-family:var(--font-label); letter-spacing:.12em; font-size:11.5px;
+    padding:10px 16px; border-radius:7px; border:1px solid rgba(0,0,0,.6);
+    cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+    background:linear-gradient(180deg, #d3bbf0, var(--lick)); color:#241733; font-weight:700;
+  }
+  .lick-btn.ghost{ background:linear-gradient(180deg, var(--panel-3), var(--panel-1)); color:var(--ivory-dim); font-weight:400; }
+  .lick-btn:active{ transform:translateY(1px); }
+  .tab{
+    margin:12px 0 0; padding:12px 14px; background:var(--lcd-bg); border-radius:6px;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.65), inset 0 0 0 1px #0a140d;
+    font-family:var(--font-lcd); font-size:12px; line-height:1.55; color:var(--lcd-fg);
+    white-space:pre; overflow-x:auto;
+  }
+  .tab-legend{
+    margin:7px 2px 0; font-family:var(--font-lcd); font-size:10.5px;
+    letter-spacing:.03em; color:var(--ivory-dim);
+  }
+
+  button:focus-visible, .peg:focus-visible, .tile:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .rocker-thumb, .peg, .tile, .root-btn{ transition:none; }
+  }
+
+  @media (max-width:600px){
+    .root-row{ grid-template-columns:repeat(6, 1fr); }
+    .switch-row{ grid-template-columns:1fr; }
+    .peg, .tile{ padding:9px 2px 7px; }
+    .peg .deg, .tile .sym{ font-size:17px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="rack">
+  <div class="plate">
+    <span class="screw tl"></span><span class="screw tr"></span>
+    <span class="screw bl"></span><span class="screw br"></span>
+
+    <div class="brand-row">
+      <div class="brand">PENTATONIC<small>FRETBOARD MODULE</small></div>
+      <div class="model-tag">MODEL P-5 · GTR</div>
+    </div>
+
+    <div class="lcd" aria-live="polite">
+      <div class="lcd-line1"><span id="lcdRoot">C&nbsp;MAJOR&nbsp;PENTATONIC</span><span id="lcdView">PATTERN</span></div>
+      <div class="lcd-line2"><span id="lcdNotes">C&nbsp;·&nbsp;D&nbsp;·&nbsp;E&nbsp;·&nbsp;G&nbsp;·&nbsp;A</span><span>STANDARD TUNING</span></div>
+      <div class="lcd-caption" id="lcdCaption">Five tones, no half-step clashes — the shared root of blues, rock, folk and countless other traditions' lead lines. Root sets the key; tap a degree below to isolate it on the neck, or switch to Chords to see the five triads built from these five notes.</div>
+    </div>
+
+    <div class="section-label">ROOT</div>
+    <div class="root-row" id="rootRow"></div>
+
+    <div class="switch-row">
+      <div class="switch-block scale">
+        <div class="section-label">SCALE</div>
+        <div class="rocker" id="scaleRocker">
+          <span class="rocker-thumb"></span>
+          <button class="rocker-half" data-value="major" aria-pressed="true">MAJOR</button>
+          <button class="rocker-half" data-value="minor" aria-pressed="false">MINOR</button>
+        </div>
+      </div>
+      <div class="switch-block view">
+        <div class="section-label">LAYOUT</div>
+        <div class="rocker" id="viewRocker">
+          <span class="rocker-thumb"></span>
+          <button class="rocker-half" data-value="pattern" aria-pressed="true">PATTERN</button>
+          <button class="rocker-half" data-value="chords" aria-pressed="false">CHORDS</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fb-wrap">
+      <div class="fb-inner">
+        <div class="fb-strlabels" id="fbStrLabels"></div>
+        <div>
+          <div class="fretboard" id="fretboard"></div>
+          <div class="fret-numbers" id="fretNumbers"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-wrap">
+      <div class="section-label" id="stageLabel"><span>DEGREES</span><span class="hint">tap to isolate</span></div>
+      <div class="stage" id="stage"></div>
+    </div>
+
+    <div class="lick-wrap">
+      <div class="section-label"><span>LICK GENERATOR</span><span class="hint">random phrase, single position</span></div>
+      <div class="lick-controls">
+        <button class="lick-btn" id="lickBtn" type="button">GENERATE LICK</button>
+        <button class="lick-btn ghost" id="lickClearBtn" type="button" hidden>CLEAR</button>
+      </div>
+      <pre class="tab" id="tabOutput" hidden></pre>
+      <div class="tab-legend" id="tabLegend" hidden>h hammer-on &nbsp;·&nbsp; p pull-off &nbsp;·&nbsp; b bend</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+  var SCALES = {
+    major: { intervals:[0,2,4,7,9], degreeLabels:["1","2","3","5","6"] },
+    minor: { intervals:[0,3,5,7,10], degreeLabels:["1","♭3","4","5","♭7"] }
+  };
+  var CHORDS = {
+    major: { intervals:[0,2,4,7,9], qualities:["maj","min","min","maj","min"], numerals:["I","ii","iii","V","vi"] },
+    minor: { intervals:[0,3,5,7,10], qualities:["min","maj","min","min","maj"], numerals:["i","III","iv","v","VII"] }
+  };
+  var TRIAD = { maj:[0,4,7], min:[0,3,7] };
+
+  /* string 1 (high e) first .. string 6 (low E) last, matching standard tab/diagram order top-to-bottom */
+  var STRINGS = [
+    { name:"e", pc:4 },
+    { name:"B", pc:11 },
+    { name:"G", pc:7 },
+    { name:"D", pc:2 },
+    { name:"A", pc:9 },
+    { name:"E", pc:4 }
+  ];
+  var OPEN_MIDI = [64,59,55,50,45,40];
+  var FRET_COUNT = 17;
+  var FRET_W = 38;
+  var NUT_W = 26;
+  var ROW_H = 34;
+  var INLAY_FRETS = [3,5,7,9,12,15,17];
+  var FRET_NUMBER_LABELS = [0,3,5,7,9,12,15,17];
+
+  var state = { root:0, scaleType:"major", view:"pattern", chordIndex:0, degreesOn:[true,true,true,true,true], lick:null };
+
+  function pcOct(basePc, baseOct, addIv){
+    var total = basePc + addIv;
+    return { pc: ((total % 12) + 12) % 12, octave: baseOct + Math.floor(total/12) };
+  }
+  function noteLabel(pc){ return NOTE_NAMES[pc]; }
+
+  function scaleNotes(){
+    var s = SCALES[state.scaleType];
+    return s.intervals.map(function(iv){ return pcOct(state.root, 4, iv); });
+  }
+  function scalePcSet(){
+    var set = {};
+    scaleNotes().forEach(function(n){ set[n.pc] = true; });
+    return set;
+  }
+  function chordList(){
+    var c = CHORDS[state.scaleType];
+    return c.intervals.map(function(iv, i){
+      var root = pcOct(state.root, 4, iv);
+      var quality = c.qualities[i];
+      var tones = TRIAD[quality].map(function(tIv){ return pcOct(root.pc, root.octave, tIv); });
+      return {
+        rootPc: root.pc, quality: quality, numeral: c.numerals[i],
+        symbol: noteLabel(root.pc) + (quality === "min" ? "m" : ""),
+        tones: tones
+      };
+    });
+  }
+
+  /* active pc -> label map for whatever is currently highlighted on the neck */
+  function activeMap(){
+    var map = {};
+    if (state.view === "pattern"){
+      var s = SCALES[state.scaleType];
+      s.intervals.forEach(function(iv, i){
+        if (!state.degreesOn[i]) return;
+        var n = pcOct(state.root, 4, iv);
+        map[n.pc] = noteLabel(n.pc);
+      });
+    } else {
+      var chord = chordList()[state.chordIndex];
+      chord.tones.forEach(function(t){ map[t.pc] = noteLabel(t.pc); });
+    }
+    return map;
+  }
+
+  /* ---------- static fretboard chrome (built once) ---------- */
+  var fretboardEl = document.getElementById("fretboard");
+  var fretNumbersEl = document.getElementById("fretNumbers");
+  var strLabelsEl = document.getElementById("fbStrLabels");
+
+  function buildFretboardChrome(){
+    var totalW = NUT_W + FRET_COUNT * FRET_W;
+    var totalH = STRINGS.length * ROW_H;
+    fretboardEl.style.width = totalW + "px";
+    fretboardEl.style.height = totalH + "px";
+    fretNumbersEl.style.width = totalW + "px";
+    fretNumbersEl.style.height = "16px";
+
+    for (var f = 0; f <= FRET_COUNT; f++){
+      var line = document.createElement("div");
+      var x = f === 0 ? NUT_W : NUT_W + f * FRET_W;
+      line.className = "fret-line" + (f === 0 ? " nut" : "");
+      line.style.left = x + "px";
+      fretboardEl.appendChild(line);
+    }
+    STRINGS.forEach(function(s, si){
+      var line = document.createElement("div");
+      line.className = "string-line";
+      line.style.top = (si * ROW_H + ROW_H / 2) + "px";
+      line.style.height = (1 + si * 0.3) + "px";
+      fretboardEl.appendChild(line);
+
+      var label = document.createElement("span");
+      label.textContent = s.name;
+      strLabelsEl.appendChild(label);
+    });
+    var midY = totalH / 2;
+    INLAY_FRETS.forEach(function(f){
+      var x = NUT_W + (f - 0.5) * FRET_W;
+      if (f === 12){
+        [midY - 9, midY + 9].forEach(function(y){
+          var dot = document.createElement("div");
+          dot.className = "inlay"; dot.style.left = x + "px"; dot.style.top = y + "px";
+          fretboardEl.appendChild(dot);
+        });
+      } else {
+        var dot = document.createElement("div");
+        dot.className = "inlay"; dot.style.left = x + "px"; dot.style.top = midY + "px";
+        fretboardEl.appendChild(dot);
+      }
+    });
+    FRET_NUMBER_LABELS.forEach(function(f){
+      var x = f === 0 ? NUT_W / 2 : NUT_W + (f - 0.5) * FRET_W;
+      var lbl = document.createElement("span");
+      lbl.style.left = x + "px";
+      lbl.textContent = f;
+      fretNumbersEl.appendChild(lbl);
+    });
+  }
+
+  function paintFretboard(){
+    fretboardEl.querySelectorAll(".note").forEach(function(n){ n.remove(); });
+    var scalePcs = scalePcSet();
+    var active = activeMap();
+    var lickMap = state.lick ? lickPositionMap(state.lick) : null;
+    STRINGS.forEach(function(s, si){
+      for (var f = 0; f <= FRET_COUNT; f++){
+        var pc = (s.pc + f) % 12;
+        if (!scalePcs[pc]) continue;
+        var x = f === 0 ? NUT_W / 2 : NUT_W + (f - 0.5) * FRET_W;
+        var y = si * ROW_H + ROW_H / 2;
+        var dot = document.createElement("div");
+        dot.className = "note";
+        if (pc === state.root) dot.classList.add("is-root-ctx");
+        var label = active[pc];
+        if (label){
+          dot.classList.add("is-active");
+          if (pc === state.root) dot.classList.add("is-root");
+          dot.textContent = label;
+        }
+        if (lickMap){
+          var orders = lickMap[si + "_" + f];
+          if (orders){
+            dot.classList.add("has-lick");
+            var badge = document.createElement("span");
+            badge.className = "lick-badge";
+            badge.textContent = orders.join("·");
+            dot.appendChild(badge);
+          }
+        }
+        dot.style.left = x + "px";
+        dot.style.top = y + "px";
+        fretboardEl.appendChild(dot);
+      }
+    });
+  }
+
+  /* ---------- lick generator ---------- */
+  function buildPositionPool(){
+    var lowEPc = STRINGS[5].pc;
+    var anchorFret = ((state.root - lowEPc) % 12 + 12) % 12;
+    var winStart = anchorFret;
+    var winEnd = Math.min(FRET_COUNT, anchorFret + 4);
+    var scalePcs = scalePcSet();
+    var pool = [];
+    STRINGS.forEach(function(s, si){
+      for (var f = winStart; f <= winEnd; f++){
+        var pc = (s.pc + f) % 12;
+        if (scalePcs[pc]) pool.push({ si:si, fret:f, pc:pc, midi: OPEN_MIDI[si] + f });
+      }
+    });
+    pool.sort(function(a,b){ return a.midi - b.midi; });
+    return pool;
+  }
+
+  function generateLick(){
+    var pool = buildPositionPool();
+    if (pool.length < 3) return null;
+    var rootIndices = [];
+    pool.forEach(function(p, i){ if (p.pc === state.root) rootIndices.push(i); });
+
+    var count = 8 + Math.floor(Math.random() * 5);
+    var idx = rootIndices.length ? rootIndices[Math.floor(Math.random() * rootIndices.length)] : Math.floor(Math.random() * pool.length);
+    var events = [];
+    for (var i = 0; i < count; i++){
+      events.push(pool[idx]);
+      var r = Math.random(), step;
+      if (r < 0.55) step = Math.random() < 0.5 ? -1 : 1;
+      else if (r < 0.80) step = Math.random() < 0.5 ? -2 : 2;
+      else if (r < 0.90) step = 0;
+      else step = Math.random() < 0.5 ? -3 : 3;
+      idx = Math.max(0, Math.min(pool.length - 1, idx + step));
+    }
+    if (rootIndices.length){
+      var last = events[events.length - 1];
+      var nearest = rootIndices[0];
+      rootIndices.forEach(function(ri){
+        if (Math.abs(pool[ri].midi - last.midi) < Math.abs(pool[nearest].midi - last.midi)) nearest = ri;
+      });
+      events[events.length - 1] = pool[nearest];
+    }
+    return { events: events, technique: assignTechniques(events) };
+  }
+
+  /* h = hammer-on, p = pull-off, b = bend — only offered on same-string moves within reach */
+  function assignTechniques(events){
+    var technique = [null];
+    for (var i = 1; i < events.length; i++){
+      var prev = events[i - 1], cur = events[i];
+      var t = null;
+      if (cur.si === prev.si){
+        var d = cur.fret - prev.fret;
+        if (d > 0 && d <= 2) t = Math.random() < 0.5 ? "b" : "h";
+        else if (d > 2 && d <= 4) t = Math.random() < 0.7 ? "h" : null;
+        else if (d < 0 && d >= -4) t = Math.random() < 0.7 ? "p" : null;
+      }
+      technique.push(t);
+    }
+    return technique;
+  }
+
+  function lickPositionMap(lick){
+    var map = {};
+    lick.events.forEach(function(e, i){
+      var key = e.si + "_" + e.fret;
+      var label = String(i + 1) + (lick.technique[i] || "");
+      if (!map[key]) map[key] = [];
+      map[key].push(label);
+    });
+    return map;
+  }
+
+  /* consecutive notes linked by a technique share one tab column, e.g. "5h7p5" */
+  function buildTabColumns(lick){
+    var columns = [];
+    var cur = null;
+    lick.events.forEach(function(e, i){
+      var tech = lick.technique[i];
+      if (cur && tech){
+        cur.text += tech + e.fret;
+      } else {
+        if (cur) columns.push(cur);
+        cur = { si: e.si, text: String(e.fret) };
+      }
+    });
+    if (cur) columns.push(cur);
+    return columns;
+  }
+
+  function buildTabLines(lick){
+    var columns = buildTabColumns(lick);
+    var rows = STRINGS.map(function(s){ return s.name + "|-"; });
+    columns.forEach(function(col){
+      var width = col.text.length;
+      for (var si = 0; si < STRINGS.length; si++){
+        rows[si] += (si === col.si ? col.text : "-".repeat(width)) + "-";
+      }
+    });
+    return rows.map(function(r){ return r + "|"; }).join("\n");
+  }
+
+  function clearLick(){
+    state.lick = null;
+    document.getElementById("tabOutput").hidden = true;
+    document.getElementById("tabLegend").hidden = true;
+    document.getElementById("lickClearBtn").hidden = true;
+  }
+
+  function renderLick(){
+    var tabEl = document.getElementById("tabOutput");
+    var legendEl = document.getElementById("tabLegend");
+    var clearBtn = document.getElementById("lickClearBtn");
+    if (state.lick){
+      tabEl.textContent = buildTabLines(state.lick);
+      tabEl.hidden = false;
+      legendEl.hidden = false;
+      clearBtn.hidden = false;
+    } else {
+      tabEl.hidden = true;
+      legendEl.hidden = true;
+      clearBtn.hidden = true;
+    }
+    paintFretboard();
+  }
+
+  document.getElementById("lickBtn").addEventListener("click", function(){
+    var lick = generateLick();
+    if (!lick) return;
+    state.lick = lick;
+    renderLick();
+  });
+  document.getElementById("lickClearBtn").addEventListener("click", function(){
+    clearLick();
+    paintFretboard();
+  });
+
+  /* ---------- root row ---------- */
+  var rootRow = document.getElementById("rootRow");
+  function buildRootRow(){
+    rootRow.innerHTML = "";
+    for (var pc = 0; pc < 12; pc++){
+      var btn = document.createElement("button");
+      btn.className = "root-btn"; btn.type = "button"; btn.dataset.pc = pc;
+      btn.innerHTML = noteLabel(pc) + '<span class="dot"></span>';
+      btn.addEventListener("click", function(){
+        state.root = parseInt(this.dataset.pc, 10);
+        clearLick();
+        renderAll();
+      });
+      rootRow.appendChild(btn);
+    }
+  }
+
+  /* ---------- degree / chord stage ---------- */
+  var stageEl = document.getElementById("stage");
+  var stageLabelEl = document.getElementById("stageLabel");
+
+  function buildStage(){
+    stageEl.innerHTML = "";
+    if (state.view === "pattern"){
+      stageLabelEl.innerHTML = '<span>DEGREES</span><span class="hint">tap to isolate</span>';
+      var s = SCALES[state.scaleType];
+      s.intervals.forEach(function(iv, i){
+        var n = pcOct(state.root, 4, iv);
+        var peg = document.createElement("div");
+        peg.className = "peg" + (state.degreesOn[i] ? " is-active" : " is-off");
+        peg.dataset.index = i;
+        peg.innerHTML = '<div class="deg">'+s.degreeLabels[i]+'</div><div class="name">'+noteLabel(n.pc)+'</div>';
+        peg.addEventListener("click", function(){
+          var idx = parseInt(this.dataset.index, 10);
+          state.degreesOn[idx] = !state.degreesOn[idx];
+          renderAll();
+        });
+        stageEl.appendChild(peg);
+      });
+    } else {
+      stageLabelEl.innerHTML = '<span>CHORDS</span><span class="hint">tap to select</span>';
+      chordList().forEach(function(ch, i){
+        var tile = document.createElement("div");
+        tile.className = "tile" + (i === state.chordIndex ? " is-active" : "");
+        tile.dataset.index = i;
+        var noteStr = ch.tones.map(function(t){ return noteLabel(t.pc); }).join(" · ");
+        tile.innerHTML = '<span class="rn">'+ch.numeral+'</span><div class="sym">'+ch.symbol+'</div><div class="notes">'+noteStr+'</div>';
+        tile.addEventListener("click", function(){
+          state.chordIndex = parseInt(this.dataset.index, 10);
+          renderAll();
+        });
+        stageEl.appendChild(tile);
+      });
+    }
+  }
+
+  function updateLcd(){
+    document.getElementById("lcdRoot").textContent =
+      noteLabel(state.root) + " " + (state.scaleType === "major" ? "MAJOR" : "MINOR") + " PENTATONIC";
+    document.getElementById("lcdView").textContent = state.view.toUpperCase();
+    if (state.view === "pattern"){
+      document.getElementById("lcdNotes").textContent = scaleNotes().map(function(n){ return noteLabel(n.pc); }).join(" · ");
+    } else {
+      var ch = chordList()[state.chordIndex];
+      document.getElementById("lcdNotes").textContent =
+        ch.numeral + " " + ch.symbol + "  (" + ch.tones.map(function(t){ return noteLabel(t.pc); }).join(" · ") + ")";
+    }
+  }
+
+  function renderAll(){
+    document.querySelectorAll(".root-btn").forEach(function(b){
+      var pc = parseInt(b.dataset.pc, 10);
+      b.classList.toggle("is-root", pc === state.root);
+    });
+    var pcs = scalePcSet();
+    document.querySelectorAll(".root-btn").forEach(function(b){
+      var pc = parseInt(b.dataset.pc, 10);
+      b.classList.toggle("in-scale", !!pcs[pc] && pc !== state.root);
+    });
+    paintFretboard();
+    buildStage();
+    updateLcd();
+  }
+
+  function wireRocker(id, onChange){
+    var rocker = document.getElementById(id);
+    var halves = rocker.querySelectorAll(".rocker-half");
+    halves.forEach(function(h, idx){
+      h.addEventListener("click", function(){
+        halves.forEach(function(x){ x.setAttribute("aria-pressed", "false"); });
+        h.setAttribute("aria-pressed", "true");
+        rocker.classList.toggle("pos-1", idx === 1);
+        onChange(h.dataset.value);
+      });
+    });
+  }
+  wireRocker("scaleRocker", function(v){
+    state.scaleType = v;
+    state.degreesOn = [true,true,true,true,true];
+    state.chordIndex = 0;
+    clearLick();
+    renderAll();
+  });
+  wireRocker("viewRocker", function(v){
+    state.view = v;
+    renderAll();
+  });
+
+  buildFretboardChrome();
+  buildRootRow();
+  renderAll();
+})();
+</script>
+</body>
+</html>
