@@ -108,6 +108,25 @@
   }
   .root-btn.is-root .dot{ background:var(--panel-0); }
 
+  .pos-row{ display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; margin:0 6px 20px; }
+  .pos-btn{
+    position:relative; padding:8px 2px 7px;
+    background:linear-gradient(180deg, var(--panel-3), var(--panel-1));
+    border:1px solid rgba(0,0,0,.55); border-radius:6px;
+    color:var(--ivory-dim); cursor:pointer; text-align:center;
+    box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 2px 3px rgba(0,0,0,.4);
+    transition:background .12s, color .12s, transform .05s;
+  }
+  .pos-btn .num{ display:block; font-family:var(--font-label); font-weight:700; font-size:14px; }
+  .pos-btn .sub{ display:block; margin-top:2px; font-family:var(--font-lcd); font-size:9px; color:var(--ivory-dim); }
+  .pos-btn:hover{ color:var(--ivory); }
+  .pos-btn:active{ transform:translateY(1px); }
+  .pos-btn.is-active{
+    color:var(--panel-0); background:linear-gradient(180deg, #86dcce, var(--teal));
+    box-shadow:0 0 10px rgba(95,201,186,.5), inset 0 1px 0 rgba(255,255,255,.4); font-weight:700;
+  }
+  .pos-btn.is-active .sub{ color:var(--panel-0); }
+
   .switch-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:0 6px 20px; }
   .rocker{ position:relative; display:flex; background:var(--panel-0); border-radius:7px; padding:3px; box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
   .rocker-thumb{
@@ -248,7 +267,7 @@
 
     <div class="lcd" aria-live="polite">
       <div class="lcd-line1"><span id="lcdRoot">C&nbsp;MAJOR&nbsp;PENTATONIC</span><span id="lcdView">PATTERN</span></div>
-      <div class="lcd-line2"><span id="lcdNotes">C&nbsp;·&nbsp;D&nbsp;·&nbsp;E&nbsp;·&nbsp;G&nbsp;·&nbsp;A</span><span>STANDARD TUNING</span></div>
+      <div class="lcd-line2"><span id="lcdNotes">C&nbsp;·&nbsp;D&nbsp;·&nbsp;E&nbsp;·&nbsp;G&nbsp;·&nbsp;A</span><span id="lcdRange">STANDARD TUNING</span></div>
       <div class="lcd-caption" id="lcdCaption">Five tones, no half-step clashes — the shared root of blues, rock, folk and countless other traditions' lead lines. Root sets the key; tap a degree below to isolate it on the neck, or switch to Chords to see the five triads built from these five notes.</div>
     </div>
 
@@ -273,6 +292,9 @@
         </div>
       </div>
     </div>
+
+    <div class="section-label"><span>POSITION</span><span class="hint">restrict to one box shape</span></div>
+    <div class="pos-row" id="posRow"></div>
 
     <div class="fb-wrap">
       <div class="fb-inner">
@@ -334,7 +356,7 @@
   var INLAY_FRETS = [3,5,7,9,12,15,17];
   var FRET_NUMBER_LABELS = [0,3,5,7,9,12,15,17];
 
-  var state = { root:0, scaleType:"major", view:"pattern", chordIndex:0, degreesOn:[true,true,true,true,true], lick:null };
+  var state = { root:0, scaleType:"major", view:"pattern", chordIndex:0, degreesOn:[true,true,true,true,true], lick:null, position:null };
 
   function pcOct(basePc, baseOct, addIv){
     var total = basePc + addIv;
@@ -363,6 +385,16 @@
         tones: tones
       };
     });
+  }
+
+  /* the 5 standard box positions: position N is anchored where scale degree N
+     first appears on the low E string, spanning a 4-fret window from there */
+  function positionWindow(degreeIndex){
+    var iv = SCALES[state.scaleType].intervals[degreeIndex];
+    var lowEPc = STRINGS[5].pc;
+    var targetPc = pcOct(state.root, 4, iv).pc;
+    var anchorFret = ((targetPc - lowEPc) % 12 + 12) % 12;
+    return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + 4) };
   }
 
   /* active pc -> label map for whatever is currently highlighted on the neck */
@@ -442,8 +474,10 @@
     var scalePcs = scalePcSet();
     var active = activeMap();
     var lickMap = state.lick ? lickPositionMap(state.lick) : null;
+    var posWin = state.position !== null ? positionWindow(state.position) : null;
     STRINGS.forEach(function(s, si){
       for (var f = 0; f <= FRET_COUNT; f++){
+        if (posWin && (f < posWin.start || f > posWin.end)) continue;
         var pc = (s.pc + f) % 12;
         if (!scalePcs[pc]) continue;
         var x = f === 0 ? NUT_W / 2 : NUT_W + (f - 0.5) * FRET_W;
@@ -476,14 +510,11 @@
 
   /* ---------- lick generator ---------- */
   function buildPositionPool(){
-    var lowEPc = STRINGS[5].pc;
-    var anchorFret = ((state.root - lowEPc) % 12 + 12) % 12;
-    var winStart = anchorFret;
-    var winEnd = Math.min(FRET_COUNT, anchorFret + 4);
+    var win = positionWindow(state.position !== null ? state.position : 0);
     var scalePcs = scalePcSet();
     var pool = [];
     STRINGS.forEach(function(s, si){
-      for (var f = winStart; f <= winEnd; f++){
+      for (var f = win.start; f <= win.end; f++){
         var pc = (s.pc + f) % 12;
         if (scalePcs[pc]) pool.push({ si:si, fret:f, pc:pc, midi: OPEN_MIDI[si] + f });
       }
@@ -630,6 +661,36 @@
     }
   }
 
+  /* ---------- position row (the 5 box shapes) ---------- */
+  var posRow = document.getElementById("posRow");
+  function buildPositionRow(){
+    posRow.innerHTML = "";
+    var s = SCALES[state.scaleType];
+    var allBtn = document.createElement("button");
+    allBtn.type = "button";
+    allBtn.className = "pos-btn" + (state.position === null ? " is-active" : "");
+    allBtn.innerHTML = '<span class="num">ALL</span><span class="sub">full neck</span>';
+    allBtn.addEventListener("click", function(){
+      state.position = null;
+      clearLick();
+      renderAll();
+    });
+    posRow.appendChild(allBtn);
+
+    s.intervals.forEach(function(iv, i){
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pos-btn" + (state.position === i ? " is-active" : "");
+      btn.innerHTML = '<span class="num">'+(i + 1)+'</span><span class="sub">'+s.degreeLabels[i]+'</span>';
+      btn.addEventListener("click", function(){
+        state.position = i;
+        clearLick();
+        renderAll();
+      });
+      posRow.appendChild(btn);
+    });
+  }
+
   /* ---------- degree / chord stage ---------- */
   var stageEl = document.getElementById("stage");
   var stageLabelEl = document.getElementById("stageLabel");
@@ -672,7 +733,15 @@
   function updateLcd(){
     document.getElementById("lcdRoot").textContent =
       noteLabel(state.root) + " " + (state.scaleType === "major" ? "MAJOR" : "MINOR") + " PENTATONIC";
-    document.getElementById("lcdView").textContent = state.view.toUpperCase();
+    document.getElementById("lcdView").textContent =
+      state.view.toUpperCase() + (state.position !== null ? " · POS " + (state.position + 1) : "");
+    var rangeEl = document.getElementById("lcdRange");
+    if (state.position !== null){
+      var win = positionWindow(state.position);
+      rangeEl.textContent = "FRETS " + win.start + "–" + win.end;
+    } else {
+      rangeEl.textContent = "STANDARD TUNING";
+    }
     if (state.view === "pattern"){
       document.getElementById("lcdNotes").textContent = scaleNotes().map(function(n){ return noteLabel(n.pc); }).join(" · ");
     } else {
@@ -693,6 +762,7 @@
       b.classList.toggle("in-scale", !!pcs[pc] && pc !== state.root);
     });
     paintFretboard();
+    buildPositionRow();
     buildStage();
     updateLcd();
   }
