@@ -388,13 +388,38 @@
   }
 
   /* the 5 standard box positions: position N is anchored where scale degree N
-     first appears on the low E string, spanning a 4-fret window from there */
+     first appears on the low E string. The window can't just be a fixed
+     3-or-4-fret span from that anchor — depending on where the anchor falls,
+     that catches a stray extra note on some strings. Instead search for the
+     narrowest window (allowing the start to sit up to 2 frets before the
+     anchor) that gives every string exactly two notes, which is what makes
+     it a genuine, compact, playable box shape. */
   function positionWindow(degreeIndex){
     var iv = SCALES[state.scaleType].intervals[degreeIndex];
     var lowEPc = STRINGS[5].pc;
     var targetPc = pcOct(state.root, 4, iv).pc;
     var anchorFret = ((targetPc - lowEPc) % 12 + 12) % 12;
-    return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + 3) };
+    var scalePcs = scalePcSet();
+
+    function countsFor(start, end){
+      return STRINGS.map(function(s){
+        var c = 0;
+        for (var f = start; f <= end; f++){ if (scalePcs[(s.pc + f) % 12]) c++; }
+        return c;
+      });
+    }
+
+    for (var width = 3; width <= 6; width++){
+      for (var startOff = -2; startOff <= 0; startOff++){
+        var start = anchorFret + startOff;
+        if (start < 0) continue;
+        var end = Math.min(FRET_COUNT, start + width);
+        if (anchorFret < start || anchorFret > end) continue;
+        if (countsFor(start, end).every(function(c){ return c === 2; })) return { start: start, end: end };
+      }
+    }
+    /* open-position edge case: no clean two-per-string box exists this close to the nut */
+    return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + 4) };
   }
 
   /* active pc -> label map for whatever is currently highlighted on the neck */
