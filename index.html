@@ -848,6 +848,7 @@
       stopPlayback();
     } else if (playState.step >= state.progression.length){
       playState.step = 0;
+      playState.beat = 0;
     }
     renderAll();
   }
@@ -920,6 +921,7 @@
     if (!seq) return;
     state.progression = seq;
     playState.step = 0;
+    playState.beat = 0;
     if (!playState.playing){
       state.chordIndex = seq[0];
       state.view = "chords";
@@ -933,11 +935,11 @@
 
   /* ---------- backing-track playback (Web Audio, synthesized) ---------- */
   var audioCtx = null;
-  var playState = { playing: false, step: 0 };
+  var playState = { playing: false, step: 0, beat: 0 };
   var playTimer = null;
   var BEATS_PER_CHORD = 4;
   var bpm = 100;
-  var tempoSeconds = (BEATS_PER_CHORD * 60) / bpm;
+  var secondsPerBeat = 60 / bpm;
   var activeVoices = [];
 
   function ensureAudioCtx(){
@@ -989,7 +991,7 @@
     master.connect(filter);
     filter.connect(ctx.destination);
 
-    var ringSeconds = Math.min(Math.max(duration * 0.9, 0.6), 3);
+    var ringSeconds = Math.min(Math.max(duration * 0.85, 0.15), 3);
     var srcs = [];
     tones.forEach(function(t){
       var midi = 48 + t.pc;
@@ -1023,18 +1025,30 @@
     activeVoices = [];
   }
 
-  function scheduleNextStep(){
+  /* re-strums the current chord once per beat (so it keeps sounding
+     instead of ringing out to silence for the rest of the bar), and only
+     advances to the next chord — and re-renders the visible UI — once
+     every BEATS_PER_CHORD beats. */
+  function scheduleNextBeat(){
     if (!playState.playing || !state.progression || !state.progression.length) return;
     if (playState.step >= state.progression.length) playState.step = 0;
-    var chordIdx = state.progression[playState.step];
-    var chord = chordList()[chordIdx];
-    state.chordIndex = chordIdx;
-    state.view = "chords";
-    syncRocker("viewRocker", "chords");
-    renderAll();
-    playChordTones(chord.tones, tempoSeconds);
-    playState.step = (playState.step + 1) % state.progression.length;
-    playTimer = setTimeout(scheduleNextStep, tempoSeconds * 1000);
+    var isDownbeat = playState.beat === 0;
+    if (isDownbeat){
+      var chordIdx = state.progression[playState.step];
+      state.chordIndex = chordIdx;
+      state.view = "chords";
+      syncRocker("viewRocker", "chords");
+      renderAll();
+    }
+    var chord = chordList()[state.progression[playState.step]];
+    playChordTones(chord.tones, secondsPerBeat * 0.95);
+
+    playState.beat++;
+    if (playState.beat >= BEATS_PER_CHORD){
+      playState.beat = 0;
+      playState.step = (playState.step + 1) % state.progression.length;
+    }
+    playTimer = setTimeout(scheduleNextBeat, secondsPerBeat * 1000);
   }
 
   function startPlayback(){
@@ -1043,10 +1057,11 @@
       if (!seq) return;
       state.progression = seq;
       playState.step = 0;
+      playState.beat = 0;
     }
     ensureAudioCtx();
     playState.playing = true;
-    scheduleNextStep();
+    scheduleNextBeat();
     updatePlayButtonUI();
   }
 
@@ -1074,7 +1089,7 @@
     if (isNaN(v) || v <= 0) v = bpm;
     v = Math.max(40, Math.min(240, v));
     bpm = v;
-    tempoSeconds = (BEATS_PER_CHORD * 60) / bpm;
+    secondsPerBeat = 60 / bpm;
     if (commit) bpmInput.value = v;
   }
   bpmInput.addEventListener("input", function(){ applyBpm(false); });
