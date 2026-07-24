@@ -237,7 +237,23 @@
     letter-spacing:.03em; color:var(--ivory-dim);
   }
 
-  button:focus-visible, .peg:focus-visible, .tile:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .prog-wrap{ margin:18px 6px 0; }
+  .prog-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
+  .prog-step{
+    position:relative; padding:9px 14px 7px; text-align:center; cursor:pointer;
+    background:linear-gradient(180deg, var(--panel-3), var(--panel-1));
+    border:1px solid rgba(0,0,0,.55); border-radius:8px;
+    box-shadow:0 2px 3px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);
+    transition:transform .05s, box-shadow .15s;
+  }
+  .prog-step:active{ transform:translateY(1px); }
+  .prog-step .rn{ display:block; font-family:var(--font-label); font-weight:700; font-size:12px; color:var(--ivory-dim); }
+  .prog-step .sym{ display:block; margin-top:3px; font-family:var(--font-lcd); font-size:15px; color:var(--ivory); }
+  .prog-step.is-current{ box-shadow:0 0 0 1.5px var(--teal), 0 0 14px rgba(95,201,186,.55); }
+  .prog-step.is-current .sym{ color:var(--teal); text-shadow:0 0 8px rgba(95,201,186,.6); }
+  .prog-arrow{ color:var(--ivory-dim); font-family:var(--font-lcd); font-size:14px; }
+
+  button:focus-visible, .peg:focus-visible, .tile:focus-visible, .prog-step:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
 
   @media (prefers-reduced-motion: reduce){
     .rocker-thumb, .peg, .tile, .root-btn{ transition:none; }
@@ -318,6 +334,15 @@
       <div class="stage" id="stage"></div>
     </div>
 
+    <div class="prog-wrap">
+      <div class="section-label"><span>CHORD PROGRESSION</span><span class="hint">tap a step to preview it</span></div>
+      <div class="lick-controls">
+        <button class="lick-btn" id="progBtn" type="button">GENERATE PROGRESSION</button>
+        <button class="lick-btn ghost" id="progClearBtn" type="button" hidden>CLEAR</button>
+      </div>
+      <div class="prog-row" id="progRow" hidden></div>
+    </div>
+
     <div class="lick-wrap">
       <div class="section-label"><span>LICK GENERATOR</span><span class="hint">random phrase, single position</span></div>
       <div class="lick-controls">
@@ -379,7 +404,7 @@
   var INLAY_FRETS = [3,5,7,9,12,15,17];
   var FRET_NUMBER_LABELS = [0,3,5,7,9,12,15,17];
 
-  var state = { root:0, scaleType:"major", noteSet:"pentatonic", view:"pattern", chordIndex:0, degreesOn:[true,true,true,true,true], lick:null, position:null };
+  var state = { root:0, scaleType:"major", noteSet:"pentatonic", view:"pattern", chordIndex:0, degreesOn:[true,true,true,true,true], lick:null, position:null, progression:null };
 
   function pcOct(basePc, baseOct, addIv){
     var total = basePc + addIv;
@@ -748,6 +773,81 @@
     paintFretboard();
   });
 
+  /* ---------- chord progression ---------- */
+  /* a 4-chord sequence drawn from whatever chords the current key/scale
+     actually offers, always resolving away from and back to the tonic
+     (index 0) for a settled feel. Reuses chordList()/state.chordIndex —
+     stepping through the progression is just picking which chord the
+     existing CHORDS layout shows, so no separate highlighting logic is
+     needed on the fretboard. */
+  function generateProgression(){
+    var chords = chordList();
+    if (chords.length < 2) return null;
+    var length = 4;
+    var seq = [0];
+    for (var i = 1; i < length - 1; i++){
+      var next;
+      do { next = Math.floor(Math.random() * chords.length); } while (next === seq[seq.length - 1]);
+      seq.push(next);
+    }
+    seq.push(0);
+    return seq;
+  }
+
+  function clearProgression(){
+    state.progression = null;
+    document.getElementById("progRow").hidden = true;
+    document.getElementById("progClearBtn").hidden = true;
+  }
+
+  function renderProgression(){
+    var progRow = document.getElementById("progRow");
+    var clearBtn = document.getElementById("progClearBtn");
+    progRow.innerHTML = "";
+    if (!state.progression){
+      progRow.hidden = true;
+      clearBtn.hidden = true;
+      return;
+    }
+    progRow.hidden = false;
+    clearBtn.hidden = false;
+    var chords = chordList();
+    state.progression.forEach(function(chordIdx, step){
+      if (step > 0){
+        var arrow = document.createElement("span");
+        arrow.className = "prog-arrow";
+        arrow.textContent = "→";
+        progRow.appendChild(arrow);
+      }
+      var ch = chords[chordIdx];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      var isCurrent = state.view === "chords" && state.chordIndex === chordIdx;
+      btn.className = "prog-step" + (isCurrent ? " is-current" : "");
+      btn.innerHTML = '<span class="rn">' + ch.numeral + '</span><span class="sym">' + ch.symbol + '</span>';
+      btn.addEventListener("click", function(){
+        state.chordIndex = chordIdx;
+        state.view = "chords";
+        syncRocker("viewRocker", "chords");
+        renderAll();
+      });
+      progRow.appendChild(btn);
+    });
+  }
+
+  document.getElementById("progBtn").addEventListener("click", function(){
+    var seq = generateProgression();
+    if (!seq) return;
+    state.progression = seq;
+    state.chordIndex = seq[0];
+    state.view = "chords";
+    syncRocker("viewRocker", "chords");
+    renderAll();
+  });
+  document.getElementById("progClearBtn").addEventListener("click", function(){
+    clearProgression();
+  });
+
   /* ---------- root row ---------- */
   var rootRow = document.getElementById("rootRow");
   function buildRootRow(){
@@ -876,6 +976,7 @@
     paintFretboard();
     buildPositionRow();
     buildStage();
+    renderProgression();
     updateLcd();
   }
 
@@ -889,32 +990,36 @@
 
   /* supports any number of options: thumb is measured/positioned in pixels
      rather than fixed CSS percentages, and its color comes from each
-     button's data-color attribute. */
-  function wireRocker(id, onChange){
+     button's data-color attribute. Exposed standalone so other features
+     (the chord progression steps) can force a rocker to a value too. */
+  function syncRocker(id, value){
     var rocker = document.getElementById(id);
     var halves = rocker.querySelectorAll(".rocker-half");
     var thumb = rocker.querySelector(".rocker-thumb");
+    halves.forEach(function(h){
+      var match = h.dataset.value === value;
+      h.setAttribute("aria-pressed", match ? "true" : "false");
+      if (match){
+        thumb.style.width = h.offsetWidth + "px";
+        thumb.style.left = h.offsetLeft + "px";
+        var pair = THUMB_COLORS[h.dataset.color] || THUMB_COLORS.amber;
+        thumb.style.background = "linear-gradient(180deg, " + pair[0] + ", " + pair[1] + ")";
+      }
+    });
+  }
 
-    function positionThumb(idx){
-      var target = halves[idx];
-      thumb.style.width = target.offsetWidth + "px";
-      thumb.style.left = target.offsetLeft + "px";
-      var pair = THUMB_COLORS[target.dataset.color] || THUMB_COLORS.amber;
-      thumb.style.background = "linear-gradient(180deg, " + pair[0] + ", " + pair[1] + ")";
-    }
-
-    halves.forEach(function(h, idx){
+  function wireRocker(id, onChange){
+    var rocker = document.getElementById(id);
+    var halves = rocker.querySelectorAll(".rocker-half");
+    halves.forEach(function(h){
       h.addEventListener("click", function(){
-        halves.forEach(function(x){ x.setAttribute("aria-pressed", "false"); });
-        h.setAttribute("aria-pressed", "true");
-        positionThumb(idx);
+        syncRocker(id, h.dataset.value);
         onChange(h.dataset.value);
       });
     });
-
-    var activeIdx = 0;
-    halves.forEach(function(h, idx){ if (h.getAttribute("aria-pressed") === "true") activeIdx = idx; });
-    positionThumb(activeIdx);
+    var initial = halves[0] ? halves[0].dataset.value : null;
+    halves.forEach(function(h){ if (h.getAttribute("aria-pressed") === "true") initial = h.dataset.value; });
+    syncRocker(id, initial);
   }
   wireRocker("scaleRocker", function(v){
     state.scaleType = v;
@@ -930,6 +1035,7 @@
     state.chordIndex = 0;
     state.position = null;
     clearLick();
+    clearProgression();
     renderAll();
   });
   wireRocker("viewRocker", function(v){
