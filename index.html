@@ -200,6 +200,12 @@
   .peg .name{ margin-top:4px; font-family:var(--font-lcd); font-size:11px; color:var(--teal); }
   .tile .rn{ position:absolute; top:6px; right:8px; font-family:var(--font-lcd); font-size:9.5px; color:var(--ivory-dim); }
   .tile .notes{ margin-top:5px; font-family:var(--font-lcd); font-size:9.5px; color:var(--ivory-dim); letter-spacing:.03em; }
+  .tile-add{
+    position:absolute; top:6px; left:7px; width:18px; height:18px; padding:0; border-radius:50%;
+    background:var(--panel-0); border:1px solid rgba(255,255,255,.18); color:var(--ivory-dim);
+    font-family:var(--font-lcd); font-size:12px; line-height:16px; text-align:center; cursor:pointer;
+  }
+  .tile-add:hover{ color:var(--teal); border-color:var(--teal); }
   .peg.is-active, .tile.is-active{
     box-shadow:0 0 0 1.5px var(--teal), 0 0 14px rgba(95,201,186,.55), inset 0 1px 0 rgba(255,255,255,.08);
   }
@@ -238,7 +244,8 @@
   }
 
   .prog-wrap{ margin:18px 6px 0; }
-  .prog-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
+  .prog-row{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; margin-top:12px; }
+  .prog-step-wrap{ position:relative; }
   .prog-step{
     position:relative; padding:9px 14px 7px; text-align:center; cursor:pointer;
     background:linear-gradient(180deg, var(--panel-3), var(--panel-1));
@@ -251,7 +258,30 @@
   .prog-step .sym{ display:block; margin-top:3px; font-family:var(--font-lcd); font-size:15px; color:var(--ivory); }
   .prog-step.is-current{ box-shadow:0 0 0 1.5px var(--teal), 0 0 14px rgba(95,201,186,.55); }
   .prog-step.is-current .sym{ color:var(--teal); text-shadow:0 0 8px rgba(95,201,186,.6); }
-  .prog-arrow{ color:var(--ivory-dim); font-family:var(--font-lcd); font-size:14px; }
+  .prog-arrow{ align-self:center; color:var(--ivory-dim); font-family:var(--font-lcd); font-size:14px; }
+  .prog-remove{
+    position:absolute; top:-6px; right:-6px; width:16px; height:16px; padding:0; border-radius:50%; z-index:2;
+    background:var(--panel-0); border:1px solid rgba(255,255,255,.2); color:var(--ivory-dim);
+    font-family:var(--font-lcd); font-size:10px; line-height:14px; text-align:center; cursor:pointer;
+  }
+  .prog-remove:hover{ color:#e0655a; border-color:#e0655a; }
+
+  .prog-transport{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px; }
+  .play-btn{
+    font-family:var(--font-label); letter-spacing:.12em; font-size:12px; font-weight:700;
+    padding:10px 20px; border-radius:7px; border:1px solid rgba(0,0,0,.6);
+    cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+    background:linear-gradient(180deg, #86dcce, var(--teal)); color:#0d211d;
+  }
+  .play-btn.is-playing{ background:linear-gradient(180deg, #f3bb63, var(--amber)); }
+  .play-btn:active{ transform:translateY(1px); }
+  .tempo-row{ display:flex; gap:6px; }
+  .tempo-btn{
+    font-family:var(--font-lcd); font-size:10.5px; letter-spacing:.06em;
+    padding:8px 11px; border-radius:6px; border:1px solid rgba(0,0,0,.55);
+    background:linear-gradient(180deg, var(--panel-3), var(--panel-1)); color:var(--ivory-dim); cursor:pointer;
+  }
+  .tempo-btn.is-active{ color:var(--panel-0); background:linear-gradient(180deg, #86dcce, var(--teal)); font-weight:700; }
 
   button:focus-visible, .peg:focus-visible, .tile:focus-visible, .prog-step:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
 
@@ -335,12 +365,20 @@
     </div>
 
     <div class="prog-wrap">
-      <div class="section-label"><span>CHORD PROGRESSION</span><span class="hint">tap a step to preview it</span></div>
+      <div class="section-label"><span>CHORD PROGRESSION</span><span class="hint">tap + on a chord above to build your own, or tap a step to preview it</span></div>
       <div class="lick-controls">
         <button class="lick-btn" id="progBtn" type="button">GENERATE PROGRESSION</button>
         <button class="lick-btn ghost" id="progClearBtn" type="button" hidden>CLEAR</button>
       </div>
       <div class="prog-row" id="progRow" hidden></div>
+      <div class="prog-transport" id="progTransport" hidden>
+        <button class="play-btn" id="playBtn" type="button">▶ PLAY</button>
+        <div class="tempo-row">
+          <button class="tempo-btn" type="button" data-secs="3">SLOW</button>
+          <button class="tempo-btn is-active" type="button" data-secs="2">MED</button>
+          <button class="tempo-btn" type="button" data-secs="1.2">FAST</button>
+        </div>
+      </div>
     </div>
 
     <div class="lick-wrap">
@@ -779,7 +817,8 @@
      (index 0) for a settled feel. Reuses chordList()/state.chordIndex —
      stepping through the progression is just picking which chord the
      existing CHORDS layout shows, so no separate highlighting logic is
-     needed on the fretboard. */
+     needed on the fretboard. Users can also build their own sequence with
+     the + button on each chord tile above. */
   function generateProgression(){
     var chords = chordList();
     if (chords.length < 2) return null;
@@ -794,23 +833,46 @@
     return seq;
   }
 
+  function addChordToProgression(chordIdx){
+    if (!state.progression) state.progression = [];
+    state.progression.push(chordIdx);
+    renderAll();
+  }
+
+  function removeProgressionStep(step){
+    if (!state.progression) return;
+    state.progression.splice(step, 1);
+    if (!state.progression.length){
+      state.progression = null;
+      stopPlayback();
+    } else if (playState.step >= state.progression.length){
+      playState.step = 0;
+    }
+    renderAll();
+  }
+
   function clearProgression(){
+    stopPlayback();
     state.progression = null;
     document.getElementById("progRow").hidden = true;
     document.getElementById("progClearBtn").hidden = true;
+    document.getElementById("progTransport").hidden = true;
   }
 
   function renderProgression(){
     var progRow = document.getElementById("progRow");
     var clearBtn = document.getElementById("progClearBtn");
+    var transport = document.getElementById("progTransport");
     progRow.innerHTML = "";
-    if (!state.progression){
+    if (!state.progression || !state.progression.length){
       progRow.hidden = true;
       clearBtn.hidden = true;
+      transport.hidden = true;
       return;
     }
     progRow.hidden = false;
     clearBtn.hidden = false;
+    transport.hidden = false;
     var chords = chordList();
     state.progression.forEach(function(chordIdx, step){
       if (step > 0){
@@ -820,6 +882,9 @@
         progRow.appendChild(arrow);
       }
       var ch = chords[chordIdx];
+      var wrap = document.createElement("div");
+      wrap.className = "prog-step-wrap";
+
       var btn = document.createElement("button");
       btn.type = "button";
       var isCurrent = state.view === "chords" && state.chordIndex === chordIdx;
@@ -831,21 +896,154 @@
         syncRocker("viewRocker", "chords");
         renderAll();
       });
-      progRow.appendChild(btn);
+
+      var removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "prog-remove";
+      removeBtn.title = "remove step";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", function(e){
+        e.stopPropagation();
+        removeProgressionStep(step);
+      });
+
+      wrap.appendChild(btn);
+      wrap.appendChild(removeBtn);
+      progRow.appendChild(wrap);
     });
+    updatePlayButtonUI();
   }
 
   document.getElementById("progBtn").addEventListener("click", function(){
     var seq = generateProgression();
     if (!seq) return;
     state.progression = seq;
-    state.chordIndex = seq[0];
-    state.view = "chords";
-    syncRocker("viewRocker", "chords");
+    playState.step = 0;
+    if (!playState.playing){
+      state.chordIndex = seq[0];
+      state.view = "chords";
+      syncRocker("viewRocker", "chords");
+    }
     renderAll();
   });
   document.getElementById("progClearBtn").addEventListener("click", function(){
     clearProgression();
+  });
+
+  /* ---------- backing-track playback (Web Audio, synthesized) ---------- */
+  var audioCtx = null;
+  var playState = { playing: false, step: 0 };
+  var playTimer = null;
+  var tempoSeconds = 2;
+  var activeVoices = [];
+
+  function ensureAudioCtx(){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function midiToFreq(midi){ return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  /* sustained pad voicing: 2 slightly detuned triangle oscillators per
+     chord tone through a shared envelope and a lowpass filter, kept low
+     enough in gain that 6 simultaneous voices don't clip. */
+  function playChordTones(tones, duration){
+    var ctx = ensureAudioCtx();
+    var now = ctx.currentTime;
+    var master = ctx.createGain();
+    var filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 2200;
+    master.connect(filter);
+    filter.connect(ctx.destination);
+    master.gain.setValueAtTime(0, now);
+    master.gain.linearRampToValueAtTime(0.09, now + 0.08);
+    master.gain.setValueAtTime(0.09, now + Math.max(0.08, duration - 0.25));
+    master.gain.linearRampToValueAtTime(0, now + duration - 0.02);
+
+    var oscs = [];
+    tones.forEach(function(t){
+      var midi = 48 + t.pc;
+      [-4, 4].forEach(function(cents){
+        var osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.value = midiToFreq(midi) * Math.pow(2, cents / 1200);
+        osc.connect(master);
+        osc.start(now);
+        osc.stop(now + duration);
+        oscs.push(osc);
+      });
+    });
+    activeVoices.push({ master: master, oscs: oscs, stopAt: now + duration });
+    activeVoices = activeVoices.filter(function(v){ return v.stopAt > now; });
+  }
+
+  /* fades out whatever's currently sounding instead of waiting for its
+     scheduled duration to finish, so Pause feels immediate. */
+  function silenceActiveVoices(){
+    if (!audioCtx) return;
+    var now = audioCtx.currentTime;
+    activeVoices.forEach(function(v){
+      try {
+        v.master.gain.cancelScheduledValues(now);
+        v.master.gain.setValueAtTime(v.master.gain.value, now);
+        v.master.gain.linearRampToValueAtTime(0, now + 0.08);
+        v.oscs.forEach(function(o){ o.stop(now + 0.1); });
+      } catch (e){ /* voice already stopped */ }
+    });
+    activeVoices = [];
+  }
+
+  function scheduleNextStep(){
+    if (!playState.playing || !state.progression || !state.progression.length) return;
+    if (playState.step >= state.progression.length) playState.step = 0;
+    var chordIdx = state.progression[playState.step];
+    var chord = chordList()[chordIdx];
+    state.chordIndex = chordIdx;
+    state.view = "chords";
+    syncRocker("viewRocker", "chords");
+    renderAll();
+    playChordTones(chord.tones, tempoSeconds);
+    playState.step = (playState.step + 1) % state.progression.length;
+    playTimer = setTimeout(scheduleNextStep, tempoSeconds * 1000);
+  }
+
+  function startPlayback(){
+    if (!state.progression || !state.progression.length){
+      var seq = generateProgression();
+      if (!seq) return;
+      state.progression = seq;
+      playState.step = 0;
+    }
+    ensureAudioCtx();
+    playState.playing = true;
+    scheduleNextStep();
+    updatePlayButtonUI();
+  }
+
+  function stopPlayback(){
+    playState.playing = false;
+    if (playTimer){ clearTimeout(playTimer); playTimer = null; }
+    silenceActiveVoices();
+    updatePlayButtonUI();
+  }
+
+  function updatePlayButtonUI(){
+    var btn = document.getElementById("playBtn");
+    if (!btn) return;
+    btn.textContent = playState.playing ? "⏸ PAUSE" : "▶ PLAY";
+    btn.classList.toggle("is-playing", playState.playing);
+  }
+
+  document.getElementById("playBtn").addEventListener("click", function(){
+    if (playState.playing) stopPlayback(); else startPlayback();
+  });
+  Array.from(document.querySelectorAll(".tempo-btn")).forEach(function(btn){
+    btn.addEventListener("click", function(){
+      tempoSeconds = parseFloat(btn.dataset.secs);
+      document.querySelectorAll(".tempo-btn").forEach(function(b){ b.classList.remove("is-active"); });
+      btn.classList.add("is-active");
+    });
   });
 
   /* ---------- root row ---------- */
@@ -923,10 +1121,14 @@
         tile.className = "tile" + (i === state.chordIndex ? " is-active" : "");
         tile.dataset.index = i;
         var noteStr = ch.tones.map(function(t){ return noteLabel(t.pc); }).join(" · ");
-        tile.innerHTML = '<span class="rn">'+ch.numeral+'</span><div class="sym">'+ch.symbol+'</div><div class="notes">'+noteStr+'</div>';
+        tile.innerHTML = '<button type="button" class="tile-add" title="add to progression">+</button><span class="rn">'+ch.numeral+'</span><div class="sym">'+ch.symbol+'</div><div class="notes">'+noteStr+'</div>';
         tile.addEventListener("click", function(){
           state.chordIndex = parseInt(this.dataset.index, 10);
           renderAll();
+        });
+        tile.querySelector(".tile-add").addEventListener("click", function(e){
+          e.stopPropagation();
+          addChordToProgression(i);
         });
         stageEl.appendChild(tile);
       });
