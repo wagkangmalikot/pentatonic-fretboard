@@ -418,15 +418,15 @@
     });
   }
 
-  /* box positions: position N is anchored where scale degree N first appears
-     on the low E string. Pentatonic boxes fit 2 notes per string; the full
-     7-note scale needs 3. The window can't just be a fixed-width span from
-     that anchor — depending on where the anchor falls, that catches a stray
-     extra (or missing) note on some strings. Instead search for the
-     narrowest window (allowing the start to sit up to 2 frets before the
-     anchor) that gives every string exactly the target note count, which is
-     what makes it a genuine, compact, playable box shape. */
-  function positionWindow(degreeIndex){
+  /* raw box window for one scale degree: anchored where that degree first
+     appears on the low E string. Pentatonic boxes fit 2 notes per string;
+     the full 7-note scale needs 3. The window can't just be a fixed-width
+     span from that anchor — depending on where the anchor falls, that
+     catches a stray extra (or missing) note on some strings. Instead search
+     for the narrowest window (allowing the start to sit up to 2 frets
+     before the anchor) that gives every string exactly the target note
+     count, which is what makes it a genuine, compact, playable box shape. */
+  function rawPositionWindow(degreeIndex){
     var iv = currentScale().intervals[degreeIndex];
     var lowEPc = STRINGS[5].pc;
     var targetPc = pcOct(state.root, 4, iv).pc;
@@ -454,6 +454,33 @@
     }
     /* open-position edge case: no clean box exists this close to the nut */
     return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + notesPerString + 2) };
+  }
+
+  /* different scale degrees can land on the identical raw window (e.g. two
+     degrees a half-step apart), which produced duplicate "positions". This
+     collapses those duplicates and orders the survivors by their fret on
+     the neck, so "Position 1" is always the lowest one, matching how
+     guitarists actually talk about positions ("7th position", etc). */
+  function computePositions(){
+    var count = degreeCount();
+    var seen = {};
+    var list = [];
+    for (var i = 0; i < count; i++){
+      var win = rawPositionWindow(i);
+      var key = win.start + "_" + win.end;
+      if (seen.hasOwnProperty(key)){
+        list[seen[key]].degrees.push(i);
+      } else {
+        seen[key] = list.length;
+        list.push({ win: win, degrees: [i] });
+      }
+    }
+    list.sort(function(a, b){ return a.win.start - b.win.start; });
+    return list;
+  }
+
+  function positionWindow(positionIndex){
+    return computePositions()[positionIndex].win;
   }
 
   /* active pc -> label map for whatever is currently highlighted on the neck */
@@ -720,11 +747,10 @@
     }
   }
 
-  /* ---------- position row (the 5 box shapes) ---------- */
+  /* ---------- position row (the box shapes, one per distinct fret window) ---------- */
   var posRow = document.getElementById("posRow");
   function buildPositionRow(){
     posRow.innerHTML = "";
-    var s = currentScale();
     var allBtn = document.createElement("button");
     allBtn.type = "button";
     allBtn.className = "pos-btn" + (state.position === null ? " is-active" : "");
@@ -736,11 +762,11 @@
     });
     posRow.appendChild(allBtn);
 
-    s.intervals.forEach(function(iv, i){
+    computePositions().forEach(function(p, i){
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pos-btn" + (state.position === i ? " is-active" : "");
-      btn.innerHTML = '<span class="num">'+(i + 1)+'</span><span class="sub">'+s.degreeLabels[i]+'</span>';
+      btn.innerHTML = '<span class="num">'+(i + 1)+'</span><span class="sub">fret '+p.win.start+'</span>';
       btn.addEventListener("click", function(){
         state.position = i;
         clearLick();
