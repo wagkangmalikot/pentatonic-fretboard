@@ -274,13 +274,15 @@
   }
   .play-btn.is-playing{ background:linear-gradient(180deg, #f3bb63, var(--amber)); }
   .play-btn:active{ transform:translateY(1px); }
-  .tempo-row{ display:flex; gap:6px; }
-  .tempo-btn{
-    font-family:var(--font-lcd); font-size:10.5px; letter-spacing:.06em;
-    padding:8px 11px; border-radius:6px; border:1px solid rgba(0,0,0,.55);
-    background:linear-gradient(180deg, var(--panel-3), var(--panel-1)); color:var(--ivory-dim); cursor:pointer;
+  .bpm-row{ display:flex; align-items:center; gap:8px; }
+  .bpm-label{ font-family:var(--font-label); font-size:10px; letter-spacing:.14em; color:var(--ivory-dim); }
+  .bpm-input{
+    width:64px; padding:8px 6px; text-align:center; border-radius:6px; border:1px solid rgba(0,0,0,.55);
+    background:var(--lcd-bg); color:var(--lcd-fg); font-family:var(--font-lcd); font-size:14px;
+    box-shadow:inset 0 2px 5px rgba(0,0,0,.6);
   }
-  .tempo-btn.is-active{ color:var(--panel-0); background:linear-gradient(180deg, #86dcce, var(--teal)); font-weight:700; }
+  .bpm-input:focus{ outline:none; box-shadow:inset 0 2px 5px rgba(0,0,0,.6), 0 0 0 2px var(--teal); }
+  .bpm-hint{ font-family:var(--font-lcd); font-size:10px; color:var(--ivory-dim); }
 
   button:focus-visible, .peg:focus-visible, .tile:focus-visible, .prog-step:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
 
@@ -372,10 +374,10 @@
       <div class="prog-row" id="progRow" hidden></div>
       <div class="prog-transport" id="progTransport" hidden>
         <button class="play-btn" id="playBtn" type="button">▶ PLAY</button>
-        <div class="tempo-row">
-          <button class="tempo-btn" type="button" data-secs="3">SLOW</button>
-          <button class="tempo-btn is-active" type="button" data-secs="2">MED</button>
-          <button class="tempo-btn" type="button" data-secs="1.2">FAST</button>
+        <div class="bpm-row">
+          <label class="bpm-label" for="bpmInput">BPM</label>
+          <input class="bpm-input" id="bpmInput" type="number" inputmode="numeric" min="40" max="240" step="1" value="100" />
+          <span class="bpm-hint">4 beats / chord</span>
         </div>
       </div>
     </div>
@@ -933,7 +935,9 @@
   var audioCtx = null;
   var playState = { playing: false, step: 0 };
   var playTimer = null;
-  var tempoSeconds = 2;
+  var BEATS_PER_CHORD = 4;
+  var bpm = 100;
+  var tempoSeconds = (BEATS_PER_CHORD * 60) / bpm;
   var activeVoices = [];
 
   function ensureAudioCtx(){
@@ -943,37 +947,63 @@
   }
   function midiToFreq(midi){ return 440 * Math.pow(2, (midi - 69) / 12); }
 
-  /* sustained pad voicing: 2 slightly detuned triangle oscillators per
-     chord tone through a shared envelope and a lowpass filter, kept low
-     enough in gain that 6 simultaneous voices don't clip. */
+  /* Karplus-Strong plucked-string synthesis: seed a short ring buffer with
+     noise at the string's period, then repeatedly average adjacent samples
+     (a 1-pole lowpass) and feed them back with a decay factor. That simple
+     feedback loop is what gives a plucked string its sharp attack and
+     naturally decaying, harmonically rich tail — the whole reason it sounds
+     like a guitar instead of a held oscillator (which sounds like an organ
+     or pad). The entire waveform is precomputed into an AudioBuffer, so no
+     real-time processing node is needed. */
+  function karplusStrongBuffer(ctx, freq, duration, ringSeconds){
+    var sampleRate = ctx.sampleRate;
+    var length = Math.max(1, Math.floor(sampleRate * duration));
+    var period = Math.max(2, Math.round(sampleRate / freq));
+    var decay = Math.pow(0.001, 1 / (ringSeconds * freq));
+    var buffer = ctx.createBuffer(1, length, sampleRate);
+    var data = buffer.getChannelData(0);
+    var ring = new Float32Array(period);
+    for (var i = 0; i < period; i++) ring[i] = Math.random() * 2 - 1;
+    var idx = 0;
+    for (var n = 0; n < length; n++){
+      var cur = ring[idx];
+      var next = ring[(idx + 1) % period];
+      data[n] = cur;
+      ring[idx] = (cur + next) * 0.5 * decay;
+      idx = (idx + 1) % period;
+    }
+    return buffer;
+  }
+
+  /* one pluck per chord tone (2 slightly detuned voices each, for a
+     12-string-ish width), routed through a shared gain (for the pause
+     fade-out) and a gentle lowpass to tame the highest harmonics. */
   function playChordTones(tones, duration){
     var ctx = ensureAudioCtx();
     var now = ctx.currentTime;
     var master = ctx.createGain();
     var filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 2200;
+    filter.frequency.value = 3200;
+    master.gain.value = 0.5;
     master.connect(filter);
     filter.connect(ctx.destination);
-    master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(0.09, now + 0.08);
-    master.gain.setValueAtTime(0.09, now + Math.max(0.08, duration - 0.25));
-    master.gain.linearRampToValueAtTime(0, now + duration - 0.02);
 
-    var oscs = [];
+    var ringSeconds = Math.min(Math.max(duration * 0.9, 0.6), 3);
+    var srcs = [];
     tones.forEach(function(t){
       var midi = 48 + t.pc;
-      [-4, 4].forEach(function(cents){
-        var osc = ctx.createOscillator();
-        osc.type = "triangle";
-        osc.frequency.value = midiToFreq(midi) * Math.pow(2, cents / 1200);
-        osc.connect(master);
-        osc.start(now);
-        osc.stop(now + duration);
-        oscs.push(osc);
+      [-3, 3].forEach(function(cents){
+        var freq = midiToFreq(midi) * Math.pow(2, cents / 1200);
+        var buf = karplusStrongBuffer(ctx, freq, duration, ringSeconds);
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(master);
+        src.start(now);
+        srcs.push(src);
       });
     });
-    activeVoices.push({ master: master, oscs: oscs, stopAt: now + duration });
+    activeVoices.push({ master: master, srcs: srcs, stopAt: now + duration });
     activeVoices = activeVoices.filter(function(v){ return v.stopAt > now; });
   }
 
@@ -987,7 +1017,7 @@
         v.master.gain.cancelScheduledValues(now);
         v.master.gain.setValueAtTime(v.master.gain.value, now);
         v.master.gain.linearRampToValueAtTime(0, now + 0.08);
-        v.oscs.forEach(function(o){ o.stop(now + 0.1); });
+        v.srcs.forEach(function(s){ s.stop(now + 0.1); });
       } catch (e){ /* voice already stopped */ }
     });
     activeVoices = [];
@@ -1037,13 +1067,18 @@
   document.getElementById("playBtn").addEventListener("click", function(){
     if (playState.playing) stopPlayback(); else startPlayback();
   });
-  Array.from(document.querySelectorAll(".tempo-btn")).forEach(function(btn){
-    btn.addEventListener("click", function(){
-      tempoSeconds = parseFloat(btn.dataset.secs);
-      document.querySelectorAll(".tempo-btn").forEach(function(b){ b.classList.remove("is-active"); });
-      btn.classList.add("is-active");
-    });
-  });
+
+  var bpmInput = document.getElementById("bpmInput");
+  function applyBpm(commit){
+    var v = parseInt(bpmInput.value, 10);
+    if (isNaN(v) || v <= 0) v = bpm;
+    v = Math.max(40, Math.min(240, v));
+    bpm = v;
+    tempoSeconds = (BEATS_PER_CHORD * 60) / bpm;
+    if (commit) bpmInput.value = v;
+  }
+  bpmInput.addEventListener("input", function(){ applyBpm(false); });
+  bpmInput.addEventListener("change", function(){ applyBpm(true); });
 
   /* ---------- root row ---------- */
   var rootRow = document.getElementById("rootRow");
