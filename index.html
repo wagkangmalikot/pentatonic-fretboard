@@ -22,6 +22,7 @@
     --wood:#5b3d28;
     --wood-hi:#7a5636;
     --lick:#b48ee0;
+    --blues:#5b8fd6;
     --font-label:"Bahnschrift","Arial Narrow","Segoe UI Semibold",system-ui,sans-serif;
     --font-lcd:ui-monospace,"Cascadia Mono","SFMono-Regular",Menlo,Consolas,monospace;
     --font-body:"Segoe UI",system-ui,-apple-system,sans-serif;
@@ -130,15 +131,11 @@
   .switch-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin:0 6px 20px; }
   .rocker{ position:relative; display:flex; background:var(--panel-0); border-radius:7px; padding:3px; box-shadow:inset 0 2px 5px rgba(0,0,0,.6); }
   .rocker-thumb{
-    position:absolute; top:3px; bottom:3px; left:3px; width:calc(50% - 3px); border-radius:5px;
+    position:absolute; top:3px; bottom:3px; left:3px; border-radius:5px;
     background:linear-gradient(180deg, #f3bb63, var(--amber));
     box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.4);
-    transition:transform .18s ease, background .18s ease; z-index:1;
+    transition:transform .18s ease, left .18s ease, width .18s ease, background .18s ease; z-index:1;
   }
-  .switch-block.view .rocker-thumb{ background:linear-gradient(180deg, #b9c6c1, var(--steel)); }
-  .rocker.pos-1 .rocker-thumb{ transform:translateX(100%); background:linear-gradient(180deg, #86dcce, var(--teal)); }
-  .switch-block.view .rocker.pos-1 .rocker-thumb{ background:linear-gradient(180deg, #b9c6c1, var(--steel)); }
-  .switch-block.noteset .rocker.pos-1 .rocker-thumb{ background:linear-gradient(180deg, #d3bbf0, var(--lick)); }
   .rocker-half{
     position:relative; z-index:2; flex:1; padding:9px 4px; background:transparent; border:0;
     font-family:var(--font-label); font-size:11.5px; letter-spacing:.14em; color:var(--ivory-dim); cursor:pointer;
@@ -280,24 +277,25 @@
         <div class="section-label">SCALE</div>
         <div class="rocker" id="scaleRocker">
           <span class="rocker-thumb"></span>
-          <button class="rocker-half" data-value="major" aria-pressed="true">MAJOR</button>
-          <button class="rocker-half" data-value="minor" aria-pressed="false">MINOR</button>
+          <button class="rocker-half" data-value="major" data-color="amber" aria-pressed="true">MAJOR</button>
+          <button class="rocker-half" data-value="minor" data-color="teal" aria-pressed="false">MINOR</button>
         </div>
       </div>
       <div class="switch-block noteset">
         <div class="section-label">NOTES</div>
         <div class="rocker" id="noteSetRocker">
           <span class="rocker-thumb"></span>
-          <button class="rocker-half" data-value="pentatonic" aria-pressed="true">PENTA</button>
-          <button class="rocker-half" data-value="full" aria-pressed="false">SCALE</button>
+          <button class="rocker-half" data-value="pentatonic" data-color="amber" aria-pressed="true">PENTA</button>
+          <button class="rocker-half" data-value="full" data-color="lick" aria-pressed="false">SCALE</button>
+          <button class="rocker-half" data-value="blues" data-color="blues" aria-pressed="false">BLUES</button>
         </div>
       </div>
       <div class="switch-block view">
         <div class="section-label">LAYOUT</div>
         <div class="rocker" id="viewRocker">
           <span class="rocker-thumb"></span>
-          <button class="rocker-half" data-value="pattern" aria-pressed="true">PATTERN</button>
-          <button class="rocker-half" data-value="chords" aria-pressed="false">CHORDS</button>
+          <button class="rocker-half" data-value="pattern" data-color="steel" aria-pressed="true">PATTERN</button>
+          <button class="rocker-half" data-value="chords" data-color="steel" aria-pressed="false">CHORDS</button>
         </div>
       </div>
     </div>
@@ -341,21 +339,25 @@
   var SCALE_TONES = {
     major: {
       pentatonic: { intervals:[0,2,4,7,9], degreeLabels:["1","2","3","5","6"] },
-      full: { intervals:[0,2,4,5,7,9,11], degreeLabels:["1","2","3","4","5","6","7"] }
+      full: { intervals:[0,2,4,5,7,9,11], degreeLabels:["1","2","3","4","5","6","7"] },
+      blues: { intervals:[0,2,3,4,7,9], degreeLabels:["1","2","♭3","3","5","6"] }
     },
     minor: {
       pentatonic: { intervals:[0,3,5,7,10], degreeLabels:["1","♭3","4","5","♭7"] },
-      full: { intervals:[0,2,3,5,7,8,10], degreeLabels:["1","2","♭3","4","5","♭6","♭7"] }
+      full: { intervals:[0,2,3,5,7,8,10], degreeLabels:["1","2","♭3","4","5","♭6","♭7"] },
+      blues: { intervals:[0,3,5,6,7,10], degreeLabels:["1","♭3","4","♭5","5","♭7"] }
     }
   };
   var CHORD_TONES = {
     major: {
       pentatonic: { intervals:[0,2,4,7,9], qualities:["maj","min","min","maj","min"], numerals:["I","ii","iii","V","vi"] },
-      full: { intervals:[0,2,4,5,7,9,11], qualities:["maj","min","min","maj","maj","min","dim"], numerals:["I","ii","iii","IV","V","vi","vii°"] }
+      full: { intervals:[0,2,4,5,7,9,11], qualities:["maj","min","min","maj","maj","min","dim"], numerals:["I","ii","iii","IV","V","vi","vii°"] },
+      blues: { intervals:[0,2,4,7,9], qualities:["maj","min","min","maj","min"], numerals:["I","ii","iii","V","vi"] }
     },
     minor: {
       pentatonic: { intervals:[0,3,5,7,10], qualities:["min","maj","min","min","maj"], numerals:["i","III","iv","v","VII"] },
-      full: { intervals:[0,2,3,5,7,8,10], qualities:["min","dim","maj","min","min","maj","maj"], numerals:["i","ii°","III","iv","v","VI","VII"] }
+      full: { intervals:[0,2,3,5,7,8,10], qualities:["min","dim","maj","min","min","maj","maj"], numerals:["i","ii°","III","iv","v","VI","VII"] },
+      blues: { intervals:[0,3,5,7,10], qualities:["min","maj","min","min","maj"], numerals:["i","III","iv","v","VII"] }
     }
   };
   var TRIAD = { maj:[0,4,7], min:[0,3,7], dim:[0,3,6] };
@@ -420,19 +422,23 @@
 
   /* raw box window for one scale degree: anchored where that degree first
      appears on the low E string. Pentatonic boxes fit 2 notes per string;
-     the full 7-note scale needs 3. The window can't just be a fixed-width
-     span from that anchor — depending on where the anchor falls, that
-     catches a stray extra (or missing) note on some strings. Instead search
-     for the narrowest window (allowing the start to sit up to 2 frets
-     before the anchor) that gives every string exactly the target note
-     count, which is what makes it a genuine, compact, playable box shape. */
+     the full 7-note scale needs 3 — but blues (with its added ♭5 "blue
+     note") clusters unevenly and doesn't support a clean fixed count at
+     all. The window can't just be a fixed-width span from the anchor either
+     way — depending on where it falls, that catches a stray extra (or
+     missing) note on some strings. Instead search for the narrowest window
+     (allowing the start to sit up to 2 frets before the anchor) that gives
+     every string exactly the target note count, which is what makes it a
+     genuine, compact, playable box shape. For scales where no fixed count
+     works cleanly, fall back to the narrowest window where every string
+     has at least one note, so the shape still contains the complete scale. */
   function rawPositionWindow(degreeIndex){
     var iv = currentScale().intervals[degreeIndex];
     var lowEPc = STRINGS[5].pc;
     var targetPc = pcOct(state.root, 4, iv).pc;
     var anchorFret = ((targetPc - lowEPc) % 12 + 12) % 12;
     var scalePcs = scalePcSet();
-    var notesPerString = state.noteSet === "pentatonic" ? 2 : 3;
+    var notesPerString = state.noteSet === "pentatonic" ? 2 : state.noteSet === "full" ? 3 : null;
     var maxWidth = state.noteSet === "pentatonic" ? 6 : 5;
 
     function countsFor(start, end){
@@ -443,17 +449,29 @@
       });
     }
 
-    for (var width = notesPerString; width <= maxWidth; width++){
-      for (var startOff = -2; startOff <= 0; startOff++){
-        var start = anchorFret + startOff;
-        if (start < 0) continue;
-        var end = Math.min(FRET_COUNT, start + width);
-        if (anchorFret < start || anchorFret > end) continue;
-        if (countsFor(start, end).every(function(c){ return c === notesPerString; })) return { start: start, end: end };
+    if (notesPerString !== null){
+      for (var width = notesPerString; width <= maxWidth; width++){
+        for (var startOff = -2; startOff <= 0; startOff++){
+          var start = anchorFret + startOff;
+          if (start < 0) continue;
+          var end = Math.min(FRET_COUNT, start + width);
+          if (anchorFret < start || anchorFret > end) continue;
+          if (countsFor(start, end).every(function(c){ return c === notesPerString; })) return { start: start, end: end };
+        }
+      }
+    }
+
+    for (var width2 = 3; width2 <= 8; width2++){
+      for (var startOff2 = -2; startOff2 <= 0; startOff2++){
+        var start2 = anchorFret + startOff2;
+        if (start2 < 0) continue;
+        var end2 = Math.min(FRET_COUNT, start2 + width2);
+        if (anchorFret < start2 || anchorFret > end2) continue;
+        if (countsFor(start2, end2).every(function(c){ return c >= 1; })) return { start: start2, end: end2 };
       }
     }
     /* open-position edge case: no clean box exists this close to the nut */
-    return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + notesPerString + 2) };
+    return { start: anchorFret, end: Math.min(FRET_COUNT, anchorFret + 5) };
   }
 
   /* different scale degrees can land on the identical raw window (e.g. two
@@ -817,13 +835,15 @@
 
   var CAPTIONS = {
     pentatonic: "Five tones, no half-step clashes — the shared root of blues, rock, folk and countless other traditions' lead lines. Root sets the key; tap a degree below to isolate it on the neck, or switch to Chords to see the five triads built from these five notes.",
-    full: "The complete seven-note scale, including the two tones pentatonic leaves out — closer intervals, more color, and an avoid note or two to navigate. Switch NOTES back to Pentatonic for the simplified five-tone form."
+    full: "The complete seven-note scale, including the two tones pentatonic leaves out — closer intervals, more color, and an avoid note or two to navigate. Switch NOTES back to Pentatonic for the simplified five-tone form.",
+    blues: "Pentatonic plus the ♭5 — the “blue note” whose clash against the natural 5th is the whole sound of blues, rock and jazz-blues phrasing. It doesn't slot into a clean fixed-count box shape the way the other sets do, so position windows here are sized to fit the full scale rather than an even number per string."
   };
 
   function updateLcd(){
+    var NOTESET_LABEL = { pentatonic: "PENTATONIC", full: "SCALE", blues: "BLUES SCALE" };
     document.getElementById("lcdRoot").textContent =
       noteLabel(state.root) + " " + (state.scaleType === "major" ? "MAJOR" : "MINOR") + " " +
-      (state.noteSet === "pentatonic" ? "PENTATONIC" : "SCALE");
+      NOTESET_LABEL[state.noteSet];
     document.getElementById("lcdCaption").textContent = CAPTIONS[state.noteSet];
     document.getElementById("lcdView").textContent =
       state.view.toUpperCase() + (state.position !== null ? " · POS " + (state.position + 1) : "");
@@ -859,17 +879,42 @@
     updateLcd();
   }
 
+  var THUMB_COLORS = {
+    amber: ["#f3bb63", "var(--amber)"],
+    teal: ["#86dcce", "var(--teal)"],
+    steel: ["#b9c6c1", "var(--steel)"],
+    lick: ["#d3bbf0", "var(--lick)"],
+    blues: ["#8fb3e8", "var(--blues)"]
+  };
+
+  /* supports any number of options: thumb is measured/positioned in pixels
+     rather than fixed CSS percentages, and its color comes from each
+     button's data-color attribute. */
   function wireRocker(id, onChange){
     var rocker = document.getElementById(id);
     var halves = rocker.querySelectorAll(".rocker-half");
+    var thumb = rocker.querySelector(".rocker-thumb");
+
+    function positionThumb(idx){
+      var target = halves[idx];
+      thumb.style.width = target.offsetWidth + "px";
+      thumb.style.left = target.offsetLeft + "px";
+      var pair = THUMB_COLORS[target.dataset.color] || THUMB_COLORS.amber;
+      thumb.style.background = "linear-gradient(180deg, " + pair[0] + ", " + pair[1] + ")";
+    }
+
     halves.forEach(function(h, idx){
       h.addEventListener("click", function(){
         halves.forEach(function(x){ x.setAttribute("aria-pressed", "false"); });
         h.setAttribute("aria-pressed", "true");
-        rocker.classList.toggle("pos-1", idx === 1);
+        positionThumb(idx);
         onChange(h.dataset.value);
       });
     });
+
+    var activeIdx = 0;
+    halves.forEach(function(h, idx){ if (h.getAttribute("aria-pressed") === "true") activeIdx = idx; });
+    positionThumb(activeIdx);
   }
   wireRocker("scaleRocker", function(v){
     state.scaleType = v;
